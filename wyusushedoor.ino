@@ -5,7 +5,7 @@
 #include <Servo.h>
 Servo servo_16;   //舵机输出口 GIPO16/D0
 
-char auth[] = "402f43cef1be";      // 点灯科技密钥
+char auth[] = "输入你的密钥";      // 点灯科技密钥
 char ssid[] = "DIRECT-hp-Android_2102";                //无线网络名称
 char pswd[] = "MItiyk34";          //无线密码
 

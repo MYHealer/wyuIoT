@@ -8,9 +8,9 @@
 #include <Servo.h>
 Servo servo_16;   //舵机输出口 GIPO16/D0
 
-char auth[] = "d86b2321f597";      // 点灯科技密钥
-char ssid[] = "DIRECT-hp-Android_2102";                //无线网络名称
-char pswd[] = "MItiyk34";          //无线密码
+char auth[] = "输入你的密钥";      // 点灯科技密钥
+char ssid[] = "输入你的WiFi名称";                //无线网络名称
+char pswd[] = "输入你的WiFi密码";          //无线密码
 
 BlinkerButton Button1("btn");      //app对应的按键名称
 bool oState = false;               //创建一个Bool类型的变量

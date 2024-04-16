@@ -1,6 +1,3 @@
-//功能1.可以反馈按键状态
-//   2.连接小爱同学
-//   3.小爱同学控制的状态同步到app里面
 #define BLINKER_PRINT Serial
 #define BLINKER_WIFI
 #define BLINKER_MIOT_LIGHT         //定义小爱同学为灯
@@ -13,7 +10,7 @@ char ssid[] = "DIRECT-hp-Android_2102";                //无线网络名称
 char pswd[] = "MItiyk34";          //无线密码
 
 BlinkerButton Button1("btn");      //app对应的按键名称
-bool oState = false;
+bool oState = false;               //创建一个Bool类型的变量
 
 void button1_callback(const String & state){    //按下按键会执行的命令
     BLINKER_LOG("get button state: ", state);   //获取app里面按键的状态
@@ -25,8 +22,8 @@ void button1_callback(const String & state){    //按下按键会执行的命令
   }
 void miotPowerState(const String & state) {     //反馈给小爱同学为电源设备（只能打开和关闭）
     BLINKER_LOG("need set power state: ", state);
-
-    if (state == BLINKER_CMD_ON) {             
+    
+    if (state == BLINKER_CMD_ON) {             //如果小爱同学收到打开命令
         oState = true;
         BlinkerMIOT.powerState("on");          //电源设备状态开
         BlinkerMIOT.print();                   //给小爱同学反馈
@@ -36,19 +33,18 @@ void miotPowerState(const String & state) {     //反馈给小爱同学为电源
         servo_16.write(95); //设置该角度方便手动开关灯 就是开完灯舵机归位
         digitalWrite(LED_BUILTIN , HIGH);
     }
-    else if (state == BLINKER_CMD_OFF) {
+    else if (state == BLINKER_CMD_OFF) {        //如果小爱同学收到关闭命令
         oState = false;
         BlinkerMIOT.powerState("off");          //电源设备状态关
-        BlinkerMIOT.print();                   //给小爱同学反馈
+        BlinkerMIOT.print();                    //给小爱同学反馈
     }
-
 }
 
 void miotQuery(int32_t queryCode)
 {
   BLINKER_LOG("MIOT Query codes: ", queryCode, ",  onstate: ", oState);
 
-  switch (queryCode)
+    switch (queryCode)
   {
     case BLINKER_CMD_QUERY_ALL_NUMBER :
       BLINKER_LOG("MIOT Query All");

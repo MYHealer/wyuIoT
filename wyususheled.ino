@@ -13,7 +13,7 @@ char ssid[] = "DIRECT-hp-Android_2102";                //无线网络名称
 char pswd[] = "MItiyk34";          //无线密码
 
 BlinkerButton Button1("btn");      //app对应的按键名称
-bool oState = false;
+bool oState = false;               //创建一个Bool类型的变量
 
 void button1_callback(const String & state){    //按下按键会执行的命令
     BLINKER_LOG("get button state: ", state);   //获取app里面按键的状态

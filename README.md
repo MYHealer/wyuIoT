@@ -12,3 +12,6 @@
 1.开发板5v供电，属于小功率电器且不含电池，**符合宿舍管理条例**  
 2.宿舍自动开关灯的物料与自动开门一致（不用买铁线/铜线）  
 3.电源请使用usb插线板/充电器/充电宝，自备热熔胶枪以固定舵机
+## 相关链接分享
+校园网WiFi共享可参考https://github.com/6DDUU6/ESurfingDialer-onekey
+使用小爱同学唤醒电脑可参考项目https://github.com/tty228/udp_turn_off

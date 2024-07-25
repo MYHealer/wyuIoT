@@ -5,6 +5,8 @@
 ## 宿舍自动开门物料清单（简易）
 ![image](https://github.com/MYHealer/wyuIoT/assets/141480264/4a1f4b83-266a-4931-90eb-25fff0989f52)
 ## 程序文件  （4月16日上传）
+wyusushedoor.ino——宿舍自动开门
+wyususheled.ino——宿舍自动开灯
 更新日志  
 1.修复了小爱同学无法正常回调led/door的开关状态的bug  
 2.led增加了“开关按钮功能”，可以在点灯app单键开关灯

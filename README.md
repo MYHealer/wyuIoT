@@ -7,7 +7,7 @@
 ## 宿舍自动开门物料清单（简易）
 ![image](https://github.com/MYHealer/wyuIoT/assets/141480264/4a1f4b83-266a-4931-90eb-25fff0989f52)
 ## 程序文件  （2025年9月8日更新上传）
-new_open_door.ino——重构宿舍开门代码（新版代码，替换平台为巴法云，可以接入小爱同学和米家，优先选择这个）
+new_open_door.ino——重构宿舍开门代码（新版代码，替换平台为巴法云，可以接入小爱同学和米家，优先选择这个）  
 巴法云接入小爱教程https://bemfa.blog.csdn.net/article/details/120057589
 
 wyusushedoor.ino——宿舍自动开门（旧版代码，平台为点灯科技，无法接入小爱）

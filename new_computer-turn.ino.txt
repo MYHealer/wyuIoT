@@ -1,0 +1,227 @@
+#include <ESP8266WiFi.h>               // WiFi头文件
+#include "PubSubClient.h"              // MQTT库文件
+#include <WiFiUDP.h>                   // 恢复UDP（WOL开机用）
+
+//********************配置参数（填写你的设备真实信息）*******************//
+const char* ssid = "No Study  Play";           // 你的WiFi名称
+const char* password = "1236790";               // 你的WiFi密码
+#define ID_MQTT  "4d06d448363143cd" // 你的巴法云私钥
+const char* mqtt_topic = "computer001";            // 自定义MQTT主题名
+byte pc_mac[] = {0xBB, 0xAA, 0xAA, 0xCC, 0xDD, 0xFF}; // 你的电脑MAC（WOL必须）
+const char* pc_ip = "192.168.1.238";               // 你的电脑固定IP（请在网络设置中固定IP）
+const int pc_tcp_port = 445;                       // Windows开机必开端口（监测用,保持默认）
+const unsigned long STATUS_TIMEOUT = 60000;        // 超时时间（60秒）
+const unsigned long query_interval = 30000;        // 定时查询间隔（30秒）
+
+//********************全局变量（WOL相关，保留监测）*******************//
+WiFiClient esp_client;
+PubSubClient mqtt_client(esp_client);
+WiFiClient tcp_client; // TCP检测用
+WiFiUDP udp;           // 恢复UDP（WOL魔术包发送用）
+
+bool current_pc_state = false;                     // 电脑状态：false=关，true=开
+const char* pc_state_text = "电脑关了";            // 状态文本描述
+const char* mqtt_state = "off";                    // MQTT发布的状态值（off/on）
+unsigned long last_query_time = 0;                 // 上次查询时间
+unsigned long last_net_check_time = 0;             // 上次网络检查时间
+unsigned long last_valid_response_time = 0;        // 上次有效响应时间
+
+//********************统一状态更新函数（保留）*******************//
+void set_power_on() {
+  if (current_pc_state == false) {
+    current_pc_state = true;
+    static const char* on_text = "电脑开着";
+    static const char* on_state = "on";
+    pc_state_text = on_text;
+    mqtt_state = on_state;
+    digitalWrite(LED_BUILTIN, LOW); // 亮灯=开机
+    Serial.printf("[状态] 从【%s】更新为【电脑开着】\n", pc_state_text);
+    publish_to_bemfa(); // 同步到MQTT
+  }
+  last_valid_response_time = millis();
+}
+
+void set_power_off() {
+  if (current_pc_state == true) {
+    current_pc_state = false;
+    static const char* off_text = "电脑关了";
+    static const char* off_state = "off";
+    pc_state_text = off_text;
+    mqtt_state = off_state;
+    digitalWrite(LED_BUILTIN, HIGH); // 灭灯=关机
+    Serial.printf("[状态] 从【%s】更新为【电脑关了】\n", pc_state_text);
+    publish_to_bemfa(); // 发送「关」状态到MQTT
+  }
+  last_valid_response_time = millis();
+}
+
+//********************核心：保留WOL开机 + 纯监测*******************//
+// 1. WOL网络唤醒开机（仅收到on指令时触发，无自动发送）
+void pc_turn_on() {
+  if (current_pc_state) {
+    Serial.println("[操作] 电脑已开机，无需发送WOL指令");
+    return;
+  }
+  Serial.println("[操作] 收到开机指令，发送WOL魔术包...");
+  // WOL魔术包格式：6个0xFF + 16次电脑MAC地址
+  udp.beginPacket("255.255.255.255", 9); // WOL默认广播端口9
+  byte wake_preamble[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+  udp.write(wake_preamble, sizeof(wake_preamble));
+  for (int i = 0; i < 16; i++) {
+    udp.write(pc_mac, sizeof(pc_mac)); // 用你的电脑MAC生成包
+  }
+  udp.endPacket();
+  Serial.println("[操作] WOL魔术包发送完成");
+  // 发送后立即检测状态
+  check_pc_online();
+}
+
+// 2. TCP端口检测（纯监测，判断电脑是否开机）
+bool check_pc_online() {
+  tcp_client.stop(); // 关闭旧连接
+  Serial.printf("[监测] 检测电脑 %s:%d 状态...\n", pc_ip, pc_tcp_port);
+  
+  // 仅尝试连接，不发送任何指令
+  if (tcp_client.connect(pc_ip, pc_tcp_port)) {
+    Serial.println("[监测] 电脑开机（端口可连接）");
+    tcp_client.stop();
+    set_power_on(); // 同步开机状态
+    return true;
+  } else {
+    Serial.println("[监测] 电脑关机/离线（端口不可连接）");
+    return false;
+  }
+}
+
+// 3. 定时检测（仅更新状态，无自动开机）
+void check_status_periodically() {
+  if (millis() - last_query_time >= query_interval) {
+    last_query_time = millis();
+    check_pc_online(); // 仅检测，不发开机指令
+    // 超时判定关机（核心需求）
+    if (!current_pc_state && (millis() - last_valid_response_time >= STATUS_TIMEOUT)) {
+      set_power_off();
+    }
+  }
+}
+
+// 4. 超时检查（仅发关状态，无其他操作）
+void check_status_timeout() {
+  if (current_pc_state == true) {
+    if (millis() - last_valid_response_time >= STATUS_TIMEOUT) {
+      Serial.printf("[超时] %d秒无响应，设为关机并发送状态关\n", STATUS_TIMEOUT/1000);
+      set_power_off();
+    }
+  }
+}
+
+// 5. WiFi保活（初始化UDP）
+void check_wifi_connection() {
+  if (millis() - last_net_check_time >= 5000) {
+    last_net_check_time = millis();
+    if (WiFi.status() != WL_CONNECTED) {
+      Serial.println("[网络] WiFi断开，重连中...");
+      WiFi.disconnect();
+      WiFi.begin(ssid, password);
+      while (WiFi.status() != WL_CONNECTED) {
+        delay(500);
+        Serial.print(".");
+      }
+      Serial.printf("\n[网络] WiFi重连成功，IP：%s\n", WiFi.localIP().toString().c_str());
+      udp.begin(2333); // 初始化UDP（WOL用）
+      last_valid_response_time = millis();
+    }
+  }
+}
+
+//********************MQTT相关（响应on/query，忽略off）*******************//
+void init_wifi() {
+  delay(10);
+  Serial.printf("[网络] 连接WiFi：%s\n", ssid);
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.printf("\n[网络] WiFi连接成功，IP：%s\n", WiFi.localIP().toString().c_str());
+  udp.begin(2333); // 初始化UDP（WOL用）
+}
+
+// MQTT回调：响应on（开机）、query（查询），忽略off
+void mqtt_callback(char* topic, byte* payload, unsigned int length) {
+  char cmd_buf[64] = {0};
+  int cmd_len = min(length, (unsigned int)(sizeof(cmd_buf) - 1));
+  memcpy(cmd_buf, payload, cmd_len);
+  cmd_buf[cmd_len] = '\0';
+  String cmd = String(cmd_buf);
+  cmd.trim();
+  
+  Serial.printf("[MQTT] 收到指令：%s\n", cmd.c_str());
+
+  if (cmd == "on" && !current_pc_state) {
+    Serial.println("[MQTT] 执行开机：发送WOL魔术包");
+    pc_turn_on(); // 仅此时触发开机，无自动发送
+  } else if (cmd == "query") {
+    Serial.println("[MQTT] 执行查询，同步当前状态");
+    check_pc_online(); // 立即检测
+    publish_to_bemfa();
+  } else if (cmd == "off") {
+    Serial.println("[MQTT] 已禁用关机指令，忽略");
+  } else {
+    Serial.printf("[MQTT] 无效指令，忽略：%s\n", cmd.c_str());
+  }
+}
+
+// MQTT重连
+void mqtt_reconnect() {
+  while (!mqtt_client.connected()) {
+    Serial.print("[MQTT] 连接巴法云...");
+    if (mqtt_client.connect(ID_MQTT)) {
+      Serial.println("成功！");
+      mqtt_client.subscribe(mqtt_topic);
+      publish_to_bemfa();
+    } else {
+      Serial.printf("失败，错误码：%d，5秒后重试\n", mqtt_client.state());
+      delay(5000);
+    }
+  }
+}
+
+// 同步状态到巴法云
+void publish_to_bemfa() {
+  if (mqtt_client.connected()) {
+    mqtt_client.publish(mqtt_topic, mqtt_state);
+    Serial.printf("[MQTT] 同步状态：%s（%s）\n", mqtt_state, pc_state_text);
+  }
+}
+
+//********************初始化+主循环*******************//
+void setup() {
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, HIGH); // 初始关（灭灯）
+  Serial.begin(115200);
+  delay(100);
+  Serial.println("==================== 监测+手动WOL开机模式启动 ====================");
+  
+  init_wifi();
+  mqtt_client.setServer("bemfa.com", 9501); // 巴法云MQTT服务器
+  mqtt_client.setCallback(mqtt_callback);
+  
+  last_valid_response_time = millis();
+  publish_to_bemfa(); // 初始发送「关」状态
+}
+
+void loop() {
+  // MQTT保活
+  if (!mqtt_client.connected()) {
+    mqtt_reconnect();
+  }
+  mqtt_client.loop();
+  
+  // 核心逻辑：网络保活 → 定时监测 → 超时发关状态
+  check_wifi_connection();
+  check_status_periodically();
+  check_status_timeout();
+  
+  delay(10);
+}

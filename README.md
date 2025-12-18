@@ -17,7 +17,7 @@ wyususheled.ino——宿舍自动开灯 （旧版代码，平台为点灯科技�
 25年9月(新)  
 **由于米家3C政策的落实，点灯科技于25年7月1日关闭对小爱的支持，为此作者只能重构代码，选择了依旧能接入小爱和米家平台的巴法云平台。请下载或复制new_open_door.ino使用**  
 25年12月(新)  
-已经更新WOL远程电脑开机的代码，请下载或复制**new_computer-turn.ino**使用，关机操作需要搭配https://github.com/SpacJoy/Remote-Controls这个项目操作，强烈推荐  
+已经更新WOL远程电脑开机的代码，请下载或复制**new_computer-turn.ino**使用，关机操作需要搭配https://github.com/SpacJoy/Remote-Controls 这个项目操作，强烈推荐  
 之前电灯科技失效的项目也可以复制我的代码逻辑给AI，让AI帮你将你的点灯科技设备迁移至巴法云平台。  
 
 
